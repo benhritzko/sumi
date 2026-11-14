@@ -1,0 +1,14 @@
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+
+# Rust
+rust/target/
+
+# OS
+.DS_Store
+Thumbs.db
