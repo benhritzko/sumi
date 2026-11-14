@@ -6,35 +6,26 @@
   <title>Sumi playground</title>
   <style>
     /* Sumi tokens (Ember edition) */
-    :root {
-      --paper: #000; --ink: #cdc4ba; --ink-muted: #958f87; --ink-faint: #807a73;
-      --line: rgba(205, 196, 186, .26); --signal: #ce5e32;
-      --s2: 8px; --s4: 16px; --s5: 24px;
+    :root { --paper: #000; --ink: #cdc4ba; --ink-faint: #807a73; --line: rgba(205, 196, 186, .26); }
+    /* The canvas IS the page. raylib (resizable window) keeps its pixel size equal to
+       the viewport, so CSS pixels and canvas pixels match and mouse input lines up. */
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper); }
+    canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; outline: none; }
+    .chip {
+      position: fixed; right: 16px; bottom: 12px; z-index: 1;
+      font: 500 10px/1.6 ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--ink-faint);
     }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--paper); color: var(--ink-muted); }
-    body {
-      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-      gap: var(--s4); padding: var(--s5) var(--s4);
-      font: 500 11px/1.6 ui-monospace, "Space Mono", monospace; letter-spacing: .12em; text-transform: uppercase;
-    }
-    canvas {
-      display: block; width: 100%; max-width: 1100px; height: auto; aspect-ratio: 1100 / 860;
-      border: 1px solid var(--line); border-radius: 2px; outline: none;
-    }
-    a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); }
-    a:hover { border-color: var(--signal); }
-    #status { color: var(--ink-faint); }
+    .chip a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); }
   </style>
 </head>
 <body>
-  <div>Sumi · Rust + raylib → WebAssembly · scroll, click, or press 1–4</div>
   <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
-  <div id="status">Loading…</div>
+  <div class="chip"><span id="status">Loading…</span> · Rust + raylib → wasm · <a href="https://github.com/benhritzko/sumi">source</a></div>
   <script>
     var Module = {
       canvas: document.getElementById("canvas"),
-      setStatus: function (s) { document.getElementById("status").textContent = s || "Running"; },
+      setStatus: function (s) { document.getElementById("status").textContent = s || "Scroll · click · keys 1–4"; },
       onRuntimeInitialized: function () { document.getElementById("canvas").focus(); },
     };
   </script>
