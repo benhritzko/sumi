@@ -1,0 +1,80 @@
+name: web
+
+# Builds the Rust playground to WebAssembly and publishes it to GitHub Pages.
+on:
+  push:
+    branches: [main]
+    paths: ["rust/**", ".github/workflows/web.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # emcc reads this on every call: compiling raylib's C code and linking the final .js/.wasm.
+  #   USE_GLFW=3      raylib's web backend talks to emscripten's GLFW shim
+  #   ASYNCIFY        lets our plain `while !window_should_close()` loop yield to the browser
+  #   ALLOW_MEMORY_GROWTH  font atlases need more than the default heap
+  EMCC_CFLAGS: "-O3 -sUSE_GLFW=3 -sWASM=1 -sASYNCIFY -sALLOW_MEMORY_GROWTH=1 -sGL_ENABLE_GET_PROC_ADDRESS=1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install cmake
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y cmake
+
+      # Toolchain pair known to work together (same as raylib-rs's own web CI).
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+          actions-cache-folder: emsdk-cache
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-emscripten
+
+      - name: Point bindgen at the emscripten sysroot
+        run: |
+          # First emcc call populates the sysroot headers.
+          echo 'int main(void){return 0;}' > /tmp/t.c && emcc /tmp/t.c -o /tmp/t.js
+          echo "BINDGEN_EXTRA_CLANG_ARGS=--sysroot=$EMSDK/upstream/emscripten/cache/sysroot" >> "$GITHUB_ENV"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Build wasm
+        run: cargo build --release --target wasm32-unknown-emscripten
+
+      - name: Assemble site
+        run: |
+          mkdir -p ../_site
+          cp web/index.html ../_site/
+          cp target/wasm32-unknown-emscripten/release/sumi.js target/wasm32-unknown-emscripten/release/sumi.wasm ../_site/
+          ls -la ../_site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

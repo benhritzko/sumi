@@ -17,6 +17,8 @@ pub struct Input {
     pub mouse: Vector2,
     pub down: bool,
     pub clicked: bool,
+    /// Mouse wheel movement this frame (positive = scrolled up).
+    pub wheel: f32,
     pub dt: f32,
 }
 
@@ -26,6 +28,7 @@ impl Input {
             mouse: rl.get_mouse_position(),
             down: rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT),
             clicked: rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT),
+            wheel: rl.get_mouse_wheel_move(),
             dt: rl.get_frame_time(),
         }
     }

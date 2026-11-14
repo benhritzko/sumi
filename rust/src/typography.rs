@@ -48,21 +48,23 @@ pub struct Fonts {
 
 impl Fonts {
     pub fn load(rl: &mut RaylibHandle, thread: &RaylibThread) -> Fonts {
+        // Fonts are compiled into the binary with include_bytes!, so there are no
+        // file paths to get wrong, and the same code works on desktop and web.
+        //
         // Atlas size = the largest size we'll draw that face at. Drawing smaller
         // scales the atlas down; bilinear filtering keeps that reasonably smooth.
-        let mut load = |file: &str, atlas_px: i32| {
-            let path = format!("{}/assets/fonts/{}", env!("CARGO_MANIFEST_DIR"), file);
+        let mut load = |name: &str, bytes: &[u8], atlas_px: i32| {
             let font = rl
-                .load_font_ex(thread, &path, atlas_px, Some(CHARSET))
-                .unwrap_or_else(|e| panic!("failed to load {path}: {e:?}"));
+                .load_font_from_memory(thread, ".ttf", bytes, atlas_px, Some(CHARSET))
+                .unwrap_or_else(|e| panic!("failed to load {name}: {e:?}"));
             font.texture().set_texture_filter(thread, TextureFilter::TEXTURE_FILTER_BILINEAR);
             font
         };
         Fonts {
-            serif: load("Fraunces-Regular.ttf", 96),
-            grotesk: load("SpaceGrotesk-Regular.ttf", 32),
-            grotesk_medium: load("SpaceGrotesk-Medium.ttf", 32),
-            mono: load("SpaceMono-Regular.ttf", 32),
+            serif: load("Fraunces", include_bytes!("../assets/fonts/Fraunces-Regular.ttf"), 96),
+            grotesk: load("Space Grotesk", include_bytes!("../assets/fonts/SpaceGrotesk-Regular.ttf"), 32),
+            grotesk_medium: load("Space Grotesk Medium", include_bytes!("../assets/fonts/SpaceGrotesk-Medium.ttf"), 32),
+            mono: load("Space Mono", include_bytes!("../assets/fonts/SpaceMono-Regular.ttf"), 32),
         }
     }
 

@@ -18,7 +18,8 @@ fn main() {
         .resizable()
         .msaa_4x()
         .build();
-    rl.set_target_fps(120);
+    // In the browser, requestAnimationFrame paces us; 60 matches most displays.
+    rl.set_target_fps(if cfg!(target_os = "emscripten") { 60 } else { 120 });
 
     let fonts = ty::Fonts::load(&mut rl, &thread);
     let mut anim = Anim::default();
@@ -30,8 +31,14 @@ fn main() {
 
     let keys = [KeyboardKey::KEY_ONE, KeyboardKey::KEY_TWO, KeyboardKey::KEY_THREE, KeyboardKey::KEY_FOUR];
 
+    // Vertical scroll offset (<= 0) and how tall the page was last frame.
+    let mut scroll = 0.0_f32;
+    let mut content_h = 0.0_f32;
+
     while !rl.window_should_close() {
         let input = Input::read(&rl);
+        let screen_h = rl.get_screen_height() as f32;
+        scroll = (scroll + input.wheel * space::S7).clamp((screen_h - content_h).min(0.0), 0.0);
         fade = (fade + input.dt / motion::SWAP).min(1.0);
         let colors = Colors::lerp(&from, &edition.colors(), motion::ease_out(fade));
 
@@ -46,7 +53,7 @@ fn main() {
 
         let mut ui = Ui { d: &mut d, fonts: &fonts, c: colors, input: &input, anim: &mut anim };
         let x = space::S7;
-        let mut y = space::S7;
+        let mut y = space::S7 + scroll;
 
         // Header
         y += ui.eyebrow("Sumi · design system · v0.1", x, y).y + space::S3;
@@ -118,6 +125,8 @@ fn main() {
         y = section(&mut ui, "Button", x, y);
         let (_, w) = ui.button("b1", "Install", x, y, Variant::Solid);
         ui.button("b2", "Docs", x + w + space::S3, y, Variant::Outline);
+        y += 40.0;
+        content_h = y - scroll + space::S7;
 
         drop(d);
         if let Some(e) = next_edition.filter(|e| *e != edition) {

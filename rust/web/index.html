@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sumi playground</title>
+  <style>
+    /* Sumi tokens (Ember edition) */
+    :root {
+      --paper: #000; --ink: #cdc4ba; --ink-muted: #958f87; --ink-faint: #807a73;
+      --line: rgba(205, 196, 186, .26); --signal: #ce5e32;
+      --s2: 8px; --s4: 16px; --s5: 24px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--paper); color: var(--ink-muted); }
+    body {
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+      gap: var(--s4); padding: var(--s5) var(--s4);
+      font: 500 11px/1.6 ui-monospace, "Space Mono", monospace; letter-spacing: .12em; text-transform: uppercase;
+    }
+    canvas {
+      display: block; width: 100%; max-width: 1100px; height: auto; aspect-ratio: 1100 / 860;
+      border: 1px solid var(--line); border-radius: 2px; outline: none;
+    }
+    a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); }
+    a:hover { border-color: var(--signal); }
+    #status { color: var(--ink-faint); }
+  </style>
+</head>
+<body>
+  <div>Sumi · Rust + raylib → WebAssembly · scroll, click, or press 1–4</div>
+  <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="status">Loading…</div>
+  <script>
+    var Module = {
+      canvas: document.getElementById("canvas"),
+      setStatus: function (s) { document.getElementById("status").textContent = s || "Running"; },
+      onRuntimeInitialized: function () { document.getElementById("canvas").focus(); },
+    };
+  </script>
+  <script async src="sumi.js"></script>
+</body>
+</html>
