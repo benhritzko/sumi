@@ -2,12 +2,18 @@
 
 A personal design system: ink on paper. Its look started from [ryoku.dev](https://ryoku.dev): near-black paper, warm bone ink, one signal color, an editorial serif paired with a technical grotesk.
 
+**▶ [Try the Rust playground in your browser](https://benhritzko.github.io/sumi/)** (Rust + raylib compiled to WebAssembly)
+
 The same tokens are implemented twice:
 
 | | |
 |---|---|
 | `kotlin/` | Compose Multiplatform library (`:sumi`) and a desktop playground (`:playground`) |
-| `rust/` | raylib, with no UI library. Tokens, fonts, and a tiny immediate-mode UI written by hand |
+| `rust/` | raylib, with no UI library. Tokens, fonts, and a tiny immediate-mode UI written by hand. Runs on desktop and in the browser |
+
+| Compose | Rust + raylib |
+|---|---|
+| ![Compose playground](docs/compose.png) | ![Rust playground](docs/rust.png) |
 
 ## Tokens (v0.1)
 
@@ -34,6 +40,8 @@ cd kotlin && ./gradlew :playground:run
 ```powershell
 cd rust; $env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"; cargo run
 ```
+
+**Web:** every push to `main` that touches `rust/` triggers [`.github/workflows/web.yml`](.github/workflows/web.yml). It compiles the same code to WebAssembly with emscripten and deploys `rust/web/index.html` + `sumi.js` + `sumi.wasm` to GitHub Pages. Fonts are compiled into the binary with `include_bytes!`, so desktop and web share one code path.
 
 ## Rust exercises
 
