@@ -51,9 +51,12 @@ jobs:
           echo 'int main(void){return 0;}' > /tmp/t.c && emcc /tmp/t.c -o /tmp/t.js
           echo "BINDGEN_EXTRA_CLANG_ARGS=--sysroot=$EMSDK/upstream/emscripten/cache/sysroot" >> "$GITHUB_ENV"
 
+      # Cache downloaded crates only. Cached build output would carry raylib's CMake
+      # config, which hard-codes the emsdk path, and setup-emsdk uses a new temp path each run.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rust
+          cache-targets: "false"
 
       - name: Build wasm
         run: cargo build --release --target wasm32-unknown-emscripten

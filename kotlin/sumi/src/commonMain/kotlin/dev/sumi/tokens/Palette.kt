@@ -21,14 +21,15 @@ object Palette {
     val EmberInkFaint = Color(0xFF807A73)
     val EmberSignal = Color(0xFFCE5E32)
 
-    // Moss: deep forest-green paper, emerald signal
-    val MossPaper = Color(0xFF031A0D)
-    val MossPaperRaised = Color(0xFF082616)
-    val MossInk = Color(0xFFC1CDC5)
-    val MossInkDim = Color(0xFFA5B3AA)
-    val MossInkMuted = Color(0xFF8A9A90)
-    val MossInkFaint = Color(0xFF7A8B80)
-    val MossSignal = Color(0xFF3FA36D)
+    // Moss: green-black paper, deep green signal
+    val MossPaper = Color(0xFF05110A)
+    val MossPaperRaised = Color(0xFF0B1A12)
+    val MossInk = Color(0xFFC1CAC4)
+    val MossInkDim = Color(0xFFA6AFAA)
+    val MossInkMuted = Color(0xFF8D9590)
+    val MossInkFaint = Color(0xFF7C8580)
+    // Deep ivy, 3.1:1 on MossPaper: meets the UI-element minimum. Use for fills and bars, not small text.
+    val MossSignal = Color(0xFF1B6E45)
 
     // Tide: blue-black paper, steel-blue signal
     val TidePaper = Color(0xFF030F19)
