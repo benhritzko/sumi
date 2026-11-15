@@ -34,6 +34,9 @@ import dev.sumi.components.ButtonSize
 import dev.sumi.components.ButtonVariant
 import dev.sumi.components.Eyebrow
 import dev.sumi.components.Text
+import dev.sumi.effects.CrtStyle
+import dev.sumi.effects.PaperStyle
+import dev.sumi.effects.crt
 import dev.sumi.effects.paperGrain
 import dev.sumi.tokens.Edition
 import dev.sumi.tokens.Shape
@@ -46,20 +49,33 @@ fun main() = application {
         state = rememberWindowState(size = DpSize(1100.dp, 860.dp)),
     ) {
         var edition by remember { mutableStateOf(Edition.Moss) }
+        var paper by remember { mutableStateOf<PaperStyle?>(PaperStyle.Fine) }
+        var crt by remember { mutableStateOf<CrtStyle?>(null) }
         SumiTheme(edition) {
-            Playground(edition, onSelect = { edition = it })
+            Box(Modifier.fillMaxSize().let { m -> crt?.let { m.crt(it) } ?: m }) {
+                Playground(
+                    edition, onSelect = { edition = it },
+                    paper, onPaper = { paper = it },
+                    crt, onCrt = { crt = it },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun Playground(selected: Edition, onSelect: (Edition) -> Unit) {
+private fun Playground(
+    selected: Edition, onSelect: (Edition) -> Unit,
+    paper: PaperStyle?, onPaper: (PaperStyle?) -> Unit,
+    crt: CrtStyle?, onCrt: (CrtStyle?) -> Unit,
+) {
     val c = SumiTheme.colors
     Column(
         Modifier
             .fillMaxSize()
             .background(c.paper)
-            .paperGrain(c.ink) // fixed to the window, drawn over everything
+            // Fixed to the window and drawn over everything, text included.
+            .let { m -> paper?.let { m.paperGrain(c.ink, it) } ?: m }
             .verticalScroll(rememberScrollState())
             .padding(Space.s7),
         verticalArrangement = Arrangement.spacedBy(Space.s7),
@@ -80,6 +96,13 @@ private fun Playground(selected: Edition, onSelect: (Edition) -> Unit) {
                         variant = if (it == selected) ButtonVariant.Solid else ButtonVariant.Raised,
                     )
                 }
+            }
+        }
+
+        Section("Surface") {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                Picker("paper", listOf(null) + PaperStyle.entries, paper, onPaper) { it?.label ?: "None" }
+                Picker("crt", listOf(null) + CrtStyle.entries, crt, onCrt) { it?.label ?: "Off" }
             }
         }
 
@@ -131,6 +154,20 @@ private fun Section(title: String, content: @Composable () -> Unit) {
         Box(Modifier.width(720.dp).height(Shape.stroke).background(SumiTheme.colors.lineSoft))
         Eyebrow(title)
         content()
+    }
+}
+
+@Composable
+private fun <T> Picker(label: String, options: List<T>, selected: T, onSelect: (T) -> Unit, name: (T) -> String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Text(label, Modifier.width(120.dp), SumiTheme.type.mono, SumiTheme.colors.inkFaint)
+        options.forEach {
+            Button(
+                name(it),
+                onClick = { onSelect(it) },
+                variant = if (it == selected) ButtonVariant.Solid else ButtonVariant.Raised,
+            )
+        }
     }
 }
 
