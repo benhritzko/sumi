@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.sumi.SumiTheme
@@ -27,6 +28,8 @@ enum class ButtonVariant {
     Solid,
     /** Hairline border, ink text. Secondary actions. */
     Outline,
+    /** Raised-paper fill, soft border, ink text. Quiet options in a group, like a picker. */
+    Raised,
 }
 
 enum class ButtonSize(val padding: PaddingValues) {
@@ -57,6 +60,12 @@ fun Button(
         ButtonVariant.Outline -> Triple(
             when { pressed -> c.tint10; hovered -> c.tint5; else -> Color.Transparent },
             if (hovered || pressed) c.lineStrong else c.line,
+            c.ink,
+        )
+        // Tints are translucent, so composite them onto paperRaised to keep the fill opaque.
+        ButtonVariant.Raised -> Triple(
+            when { pressed -> c.tint10; hovered -> c.tint5; else -> Color.Transparent }.compositeOver(c.paperRaised),
+            if (hovered || pressed) c.line else c.lineSoft,
             c.ink,
         )
     }
