@@ -47,45 +47,68 @@ private fun Modifier.overlay(effect: RuntimeEffect, blend: BlendMode): Modifier 
 
 // ---------------------------------------------------------------- SkSL
 
-private val scanlines = RuntimeEffect.makeForShader(
-    """
-    uniform float2 size;
+// Tube imperfections shared by all three: no two scanlines, regions or pixels are
+// quite the same, which is what sells it.
+private const val TUBE = """
+uniform float2 size;
 
+// Each scanline gets its own strength, and a slow "hum bar" drifts down the screen.
+float scanline(float y) {
+    float row = floor(y / 3.0);
+    float wave = 0.5 + 0.5 * sin(y * 6.2832 / 3.0);
+    float jitter = 0.8 + 0.4 * hash(float2(row, 17.0));
+    float hum = 0.85 + 0.3 * noise(float2(y * 0.004, 3.0));
+    return wave * jitter * hum;
+}
+
+// Uneven tube brightness: bright center, irregular falloff, a darker smudge or two.
+float tubeLight(float2 xy) {
+    float2 c = xy / size * 2.0 - 1.0;
+    float r = length(c * float2(1.0, 1.1)) + (fbm(xy * 0.004) - 0.5) * 0.35;
+    return 1.0 - smoothstep(0.55, 1.55, r) * 0.6 - smoothstep(0.6, 0.85, warped(xy * 0.002 + 4.0)) * 0.08;
+}
+
+// Static: per-pixel snow, clumped so it isn't a perfect uniform hiss.
+float snow(float2 xy) {
+    return (hash(floor(xy) + 0.37) - 0.5) * (0.5 + noise(xy * 0.05));
+}
+"""
+
+private val scanlines = RuntimeEffect.makeForShader(
+    SKSL_LIB + TUBE + """
     half4 main(float2 xy) {
-        // A sine with a 3px period: one dark band per three pixel rows.
-        float line = 0.5 + 0.5 * sin(xy.y * 6.2832 / 3.0);
-        float a = line * 0.28;
-        // Darken toward the corners, like the edge of a tube.
-        float2 c = xy / size * 2.0 - 1.0;
-        float vig = smoothstep(0.6, 1.6, length(c)) * 0.45;
-        a = a + vig - a * vig;
-        return half4(0, 0, 0, a);
+        float a = scanline(xy.y) * 0.26;
+        float dark = 1.0 - tubeLight(xy);
+        a = a + dark - a * dark;
+        float s = snow(xy) * 0.09;
+        // Snow lightens or darkens, on top of the line darkening.
+        half4 o = half4(0, 0, 0, a);
+        if (s > 0.0) return half4(half3(s), s) + o * (1.0 - s);
+        return half4(0, 0, 0, a - s * (1.0 - a));
     }
     """.trimIndent()
 )
 
 private val grille = RuntimeEffect.makeForShader(
-    """
-    uniform float2 size;
-
+    SKSL_LIB + TUBE + """
     // Output is a multiplier, applied with BlendMode.Multiply: 1 keeps the color, 0 kills it.
     half4 main(float2 xy) {
         float col = mod(floor(xy.x), 3.0);
-        half3 mask = col < 1.0 ? half3(1.0, 0.7, 0.7)
-                   : col < 2.0 ? half3(0.7, 1.0, 0.7)
-                   :             half3(0.7, 0.7, 1.0);
-        float scan = 0.82 + 0.18 * sin(xy.y * 6.2832 / 3.0);
-        float2 c = xy / size * 2.0 - 1.0;
-        float vig = 1.0 - 0.35 * smoothstep(0.5, 1.5, dot(c, c));
-        return half4(mask * scan * vig, 1.0);
+        // The phosphor mask is uneven: some regions show it strongly, some barely.
+        float depth = 0.18 + 0.2 * fbm(xy * 0.006 + 2.0);
+        half3 mask = col < 1.0 ? half3(1.0, 1.0 - depth, 1.0 - depth)
+                   : col < 2.0 ? half3(1.0 - depth, 1.0, 1.0 - depth)
+                   :             half3(1.0 - depth, 1.0 - depth, 1.0);
+        float scan = 1.0 - scanline(xy.y) * 0.2;
+        float light = tubeLight(xy) * (1.0 + snow(xy) * 0.12);
+        return half4(mask * scan * light, 1.0);
     }
     """.trimIndent()
 )
 
 private val curved = RuntimeEffect.makeForShader(
-    """
+    SKSL_LIB + TUBE + """
     uniform shader content;
-    uniform float2 size;
 
     half4 main(float2 xy) {
         // Work in -1..1 so the center is (0,0).
@@ -100,14 +123,23 @@ private val curved = RuntimeEffect.makeForShader(
         float edge = 1.0 - smoothstep(0.85, 1.0, length(max(q, 0.0)) / r);
         if (abs(c.x) > 1.0 || abs(c.y) > 1.0) return half4(0, 0, 0, 1);
 
-        // Color fringing: red and blue sampled a little apart.
         float2 p = (c * 0.5 + 0.5) * size;
-        float2 ca = float2(1.2, 0.0) * (0.4 + length(c));
-        half3 col = half3(content.eval(p + ca).r, content.eval(p).g, content.eval(p - ca).b);
+        // Unstable horizontal sync: every line sits a little off, with the odd bigger slip.
+        float row = floor(xy.y / 3.0);
+        float slip = (noise(float2(xy.y * 0.03, 1.0)) - 0.5) * 1.6;
+        slip += step(0.993, hash(float2(row, 5.0))) * (hash(float2(row, 6.0)) - 0.5) * 14.0;
+        p.x += slip;
 
-        float scan = 0.86 + 0.14 * sin(xy.y * 6.2832 / 3.0);
-        float vig = 1.0 - 0.45 * smoothstep(0.3, 1.8, dot(c, c));
-        return half4(col * scan * vig * edge, 1.0);
+        // Color fringing that grows toward the edges, plus a soft glow from the phosphor.
+        float2 ca = float2(1.0 + 0.6 * noise(xy * 0.01), 0.0) * (0.4 + length(c));
+        half3 col = half3(content.eval(p + ca).r, content.eval(p).g, content.eval(p - ca).b);
+        half3 glow = (content.eval(p + float2(3, 0)).rgb + content.eval(p - float2(3, 0)).rgb
+                    + content.eval(p + float2(0, 3)).rgb + content.eval(p - float2(0, 3)).rgb) * 0.25;
+        col = col + glow * 0.22;
+
+        float scan = 1.0 - scanline(xy.y) * 0.16;
+        float light = tubeLight(xy) * (1.0 + snow(xy) * 0.14);
+        return half4(col * scan * light * edge, 1.0);
     }
     """.trimIndent()
 )

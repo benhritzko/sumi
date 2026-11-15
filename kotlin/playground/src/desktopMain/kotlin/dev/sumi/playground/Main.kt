@@ -37,7 +37,11 @@ import dev.sumi.components.Text
 import dev.sumi.effects.CrtStyle
 import dev.sumi.effects.PaperStyle
 import dev.sumi.effects.crt
+import dev.sumi.effects.WearLevel
 import dev.sumi.effects.paperGrain
+import dev.sumi.effects.wear
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import dev.sumi.tokens.Edition
 import dev.sumi.tokens.Shape
 import dev.sumi.tokens.Space
@@ -51,31 +55,41 @@ fun main() = application {
         var edition by remember { mutableStateOf(Edition.Moss) }
         var paper by remember { mutableStateOf<PaperStyle?>(PaperStyle.Fine) }
         var crt by remember { mutableStateOf<CrtStyle?>(null) }
+        var worn by remember { mutableStateOf<WearLevel?>(WearLevel.Light) }
         SumiTheme(edition) {
-            Box(Modifier.fillMaxSize().let { m -> crt?.let { m.crt(it) } ?: m }) {
-                Playground(
-                    edition, onSelect = { edition = it },
-                    paper, onPaper = { paper = it },
-                    crt, onCrt = { crt = it },
-                )
+            CompositionLocalProvider(LocalWear provides worn) {
+                Box(Modifier.fillMaxSize().let { m -> crt?.let { m.crt(it) } ?: m }) {
+                    Playground(
+                        edition, onSelect = { edition = it },
+                        paper, onPaper = { paper = it },
+                        crt, onCrt = { crt = it },
+                        worn, onWorn = { worn = it },
+                    )
+                }
             }
         }
     }
 }
+
+/** How worn the page is; sections read it to decide whether to show damage. */
+private val LocalWear = compositionLocalOf<WearLevel?> { null }
 
 @Composable
 private fun Playground(
     selected: Edition, onSelect: (Edition) -> Unit,
     paper: PaperStyle?, onPaper: (PaperStyle?) -> Unit,
     crt: CrtStyle?, onCrt: (CrtStyle?) -> Unit,
+    worn: WearLevel?, onWorn: (WearLevel?) -> Unit,
 ) {
     val c = SumiTheme.colors
     Column(
         Modifier
             .fillMaxSize()
             .background(c.paper)
-            // Fixed to the window and drawn over everything, text included.
+            // Both fixed to the window and drawn over everything, text included.
+            // Grain is outside wear so worn patches are textured too.
             .let { m -> paper?.let { m.paperGrain(c.ink, it) } ?: m }
+            .let { m -> worn?.let { m.wear(c.paper, c.ink, it.amount, seed = 1f, edges = true, crease = true) } ?: m }
             .verticalScroll(rememberScrollState())
             .padding(Space.s7),
         verticalArrangement = Arrangement.spacedBy(Space.s7),
@@ -103,10 +117,11 @@ private fun Playground(
             Column(verticalArrangement = Arrangement.spacedBy(Space.s3)) {
                 Picker("paper", listOf(null) + PaperStyle.entries, paper, onPaper) { it?.label ?: "None" }
                 Picker("crt", listOf(null) + CrtStyle.entries, crt, onCrt) { it?.label ?: "Off" }
+                Picker("worn", listOf(null) + WearLevel.entries, worn, onWorn) { it?.label ?: "Off" }
             }
         }
 
-        Section("Color") {
+        Section("Color", damage = 2) {
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
                 Swatch("paper", c.paper); Swatch("paperRaised", c.paperRaised)
                 Swatch("ink", c.ink); Swatch("inkDim", c.inkDim)
@@ -115,7 +130,7 @@ private fun Playground(
             }
         }
 
-        Section("Type") {
+        Section("Type", damage = 3) {
             val t = SumiTheme.type
             Specimen("display", t.display, "Power & beauty")
             Specimen("headline", t.headline, "A whole system")
@@ -137,7 +152,7 @@ private fun Playground(
             }
         }
 
-        Section("Button") {
+        Section("Button", damage = 4) {
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
                 Button("Install", onClick = {})
                 Button("Docs", onClick = {}, variant = ButtonVariant.Outline)
@@ -149,8 +164,14 @@ private fun Playground(
 }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(Space.s4)) {
+private fun Section(title: String, damage: Int? = null, content: @Composable () -> Unit) {
+    val worn = LocalWear.current
+    val c = SumiTheme.colors
+    // A damaged section gets its own extra wear (unique seed) on top of the page's.
+    val m = if (worn != null && damage != null) {
+        Modifier.wear(c.paper, c.ink, worn.amount * 1.3f, seed = damage * 7.3f)
+    } else Modifier
+    Column(m, verticalArrangement = Arrangement.spacedBy(Space.s4)) {
         Box(Modifier.width(720.dp).height(Shape.stroke).background(SumiTheme.colors.lineSoft))
         Eyebrow(title)
         content()
