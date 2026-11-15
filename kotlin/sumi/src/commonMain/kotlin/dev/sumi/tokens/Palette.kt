@@ -28,8 +28,8 @@ object Palette {
     val MossInkDim = Color(0xFFA6AFAA)
     val MossInkMuted = Color(0xFF8D9590)
     val MossInkFaint = Color(0xFF7C8580)
-    // Deep ivy, 3.1:1 on MossPaper: meets the UI-element minimum. Use for fills and bars, not small text.
-    val MossSignal = Color(0xFF1B6E45)
+    // Emerald, 6.1:1 on MossPaper: fine for text as well as fills.
+    val MossSignal = Color(0xFF3FA36D)
 
     // Tide: blue-black paper, steel-blue signal
     val TidePaper = Color(0xFF030F19)

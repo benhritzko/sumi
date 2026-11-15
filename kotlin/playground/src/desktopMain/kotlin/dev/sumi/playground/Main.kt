@@ -56,7 +56,7 @@ fun main() = application {
     }
 }
 
-/** Accent candidates for Moss, compared live. Playground-only; the token stays Deep ivy. */
+/** Accent candidates for Moss, compared live. Playground-only; the token is Emerald. */
 private val mossAccents = listOf(
     "Emerald" to Color(0xFF3FA36D),
     "Sea green" to Color(0xFF2E8B57),
