@@ -25,9 +25,14 @@ private val LocalSumiType = staticCompositionLocalOf<SumiType> { error("Wrap you
  * Changing [edition] cross-fades every color over [Motion.SWAP_MS].
  */
 @Composable
-fun SumiTheme(edition: Edition = Edition.Ember, content: @Composable () -> Unit) {
-    val t = edition.colors
-    val colors = SumiColors(
+fun SumiTheme(edition: Edition = Edition.Ember, content: @Composable () -> Unit) =
+    SumiTheme(edition.colors, content)
+
+/** Same as above with an explicit color set, for experimenting with palettes outside the editions. */
+@Composable
+fun SumiTheme(colors: SumiColors, content: @Composable () -> Unit) {
+    val t = colors
+    val animated = SumiColors(
         paper = swap(t.paper),
         paperRaised = swap(t.paperRaised),
         ink = swap(t.ink),
@@ -39,9 +44,9 @@ fun SumiTheme(edition: Edition = Edition.Ember, content: @Composable () -> Unit)
     )
 
     CompositionLocalProvider(
-        LocalSumiColors provides colors,
+        LocalSumiColors provides animated,
         LocalSumiType provides sumiType(),
-        LocalTextSelectionColors provides TextSelectionColors(colors.signal, colors.signal.copy(alpha = 0.3f)),
+        LocalTextSelectionColors provides TextSelectionColors(animated.signal, animated.signal.copy(alpha = 0.3f)),
         content = content,
     )
 }

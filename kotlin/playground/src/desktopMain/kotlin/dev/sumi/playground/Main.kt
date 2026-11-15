@@ -2,9 +2,12 @@ package dev.sumi.playground
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -21,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -37,6 +41,7 @@ import dev.sumi.components.Text
 import dev.sumi.tokens.Edition
 import dev.sumi.tokens.Shape
 import dev.sumi.tokens.Space
+import dev.sumi.tokens.SumiColors
 
 fun main() = application {
     Window(
@@ -44,15 +49,26 @@ fun main() = application {
         title = "Sumi playground",
         state = rememberWindowState(size = DpSize(1100.dp, 860.dp)),
     ) {
-        var edition by remember { mutableStateOf(Edition.Ember) }
-        SumiTheme(edition) {
-            Playground(edition, onEdition = { edition = it })
+        var colors by remember { mutableStateOf(Edition.Moss.colors) }
+        SumiTheme(colors) {
+            Playground(colors, onSelect = { colors = it })
         }
     }
 }
 
+/** Accent candidates for Moss, compared live. Playground-only; the token stays Deep ivy. */
+private val mossAccents = listOf(
+    "Emerald" to Color(0xFF3FA36D),
+    "Sea green" to Color(0xFF2E8B57),
+    "Forest" to Color(0xFF22804F),
+    "True moss" to Color(0xFF2F7A3E),
+    "Deep ivy" to Color(0xFF1B6E45),
+    "Deeper ivy" to Color(0xFF176A42),
+)
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Playground(edition: Edition, onEdition: (Edition) -> Unit) {
+private fun Playground(selected: SumiColors, onSelect: (SumiColors) -> Unit) {
     val c = SumiTheme.colors
     Column(
         Modifier.fillMaxSize().background(c.paper).verticalScroll(rememberScrollState()).padding(Space.s7),
@@ -70,8 +86,25 @@ private fun Playground(edition: Edition, onEdition: (Edition) -> Unit) {
                 Edition.entries.forEach {
                     Button(
                         it.name,
-                        onClick = { onEdition(it) },
-                        variant = if (it == edition) ButtonVariant.Solid else ButtonVariant.Outline,
+                        onClick = { onSelect(it.colors) },
+                        variant = if (it.colors == selected) ButtonVariant.Solid else ButtonVariant.Outline,
+                    )
+                }
+            }
+        }
+
+        Section("Moss accent") {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(Space.s3),
+                verticalArrangement = Arrangement.spacedBy(Space.s3),
+            ) {
+                val moss = Edition.Moss.colors
+                mossAccents.forEach { (name, accent) ->
+                    AccentChip(
+                        name = name,
+                        accent = accent,
+                        selected = selected.paper == moss.paper && selected.signal == accent,
+                        onClick = { onSelect(moss.copy(signal = accent)) },
                     )
                 }
             }
@@ -125,6 +158,23 @@ private fun Section(title: String, content: @Composable () -> Unit) {
         Box(Modifier.width(720.dp).height(Shape.stroke).background(SumiTheme.colors.lineSoft))
         Eyebrow(title)
         content()
+    }
+}
+
+@Composable
+private fun AccentChip(name: String, accent: Color, selected: Boolean, onClick: () -> Unit) {
+    val c = SumiTheme.colors
+    Column(
+        Modifier
+            .border(Shape.stroke, if (selected) c.ink else c.line, Shape.small)
+            .clickable(onClick = onClick)
+            .padding(Space.s3),
+        verticalArrangement = Arrangement.spacedBy(Space.s2),
+    ) {
+        Box(Modifier.size(width = 104.dp, height = 40.dp).background(accent, Shape.small))
+        Text(name, style = SumiTheme.type.caption, color = if (selected) c.ink else c.inkDim)
+        val hex = "#" + (accent.toArgb() and 0xFFFFFF).toString(16).padStart(6, '0').uppercase()
+        Text(hex, style = SumiTheme.type.mono, color = c.inkFaint)
     }
 }
 
