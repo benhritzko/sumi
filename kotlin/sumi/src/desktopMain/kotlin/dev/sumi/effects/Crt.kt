@@ -1,7 +1,12 @@
 package dev.sumi.effects
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -24,25 +29,49 @@ enum class CrtStyle(val label: String) {
  * is a render effect that reads the finished content back and warps it, so it is the
  * most expensive of the three.
  *
+ * With [animate] on, the tube is alive: brightness flickers, the hum bar rolls down
+ * the screen, static changes every frame and (Curved) lines occasionally slip.
+ * That redraws every frame, so turn it off where battery matters.
+ *
  * Desktop only, like [paperGrain].
  */
-fun Modifier.crt(style: CrtStyle): Modifier = when (style) {
-    CrtStyle.Scanlines -> overlay(scanlines, BlendMode.SrcOver)
-    CrtStyle.ApertureGrille -> overlay(grille, BlendMode.Multiply)
-    CrtStyle.Curved -> graphicsLayer {
-        val builder = RuntimeShaderBuilder(curved).apply { uniform("size", size.width, size.height) }
-        renderEffect = ImageFilter.makeRuntimeShader(builder, "content", null).asComposeRenderEffect()
-        clip = true
+fun Modifier.crt(style: CrtStyle, animate: Boolean = true): Modifier = composed {
+    val time = rememberTubeTime(animate)
+    when (style) {
+        CrtStyle.Scanlines -> overlay(scanlines, BlendMode.SrcOver, time)
+        CrtStyle.ApertureGrille -> overlay(grille, BlendMode.Multiply, time)
+        // Reading time.value inside the layer block re-runs only the layer each frame,
+        // not recomposition or layout.
+        CrtStyle.Curved -> graphicsLayer {
+            val builder = RuntimeShaderBuilder(curved).apply {
+                uniform("size", size.width, size.height)
+                uniform("time", time.value)
+            }
+            renderEffect = ImageFilter.makeRuntimeShader(builder, "content", null).asComposeRenderEffect()
+            clip = true
+        }
     }
 }
 
-private fun Modifier.overlay(effect: RuntimeEffect, blend: BlendMode): Modifier = drawWithCache {
-    val shader = RuntimeShaderBuilder(effect).apply { uniform("size", size.width, size.height) }.makeShader()
-    val brush = ShaderBrush(shader)
-    onDrawWithContent {
-        drawContent()
-        drawRect(brush, blendMode = blend)
+/** Seconds since the effect appeared, ticking once per frame. Wraps so floats stay precise. */
+@Composable
+private fun rememberTubeTime(animate: Boolean): State<Float> = produceState(0f, animate) {
+    if (!animate) return@produceState
+    val start = withFrameNanos { it }
+    while (true) {
+        withFrameNanos { now -> value = ((now - start) / 1_000_000_000.0 % 600.0).toFloat() }
     }
+}
+
+private fun Modifier.overlay(effect: RuntimeEffect, blend: BlendMode, time: State<Float>): Modifier = drawWithContent {
+    drawContent()
+    // Built per frame (cheap: it's a handful of uniforms); reading time here
+    // invalidates only the draw phase.
+    val shader = RuntimeShaderBuilder(effect).apply {
+        uniform("size", size.width, size.height)
+        uniform("time", time.value)
+    }.makeShader()
+    drawRect(ShaderBrush(shader), blendMode = blend)
 }
 
 // ---------------------------------------------------------------- SkSL
@@ -51,26 +80,40 @@ private fun Modifier.overlay(effect: RuntimeEffect, blend: BlendMode): Modifier 
 // quite the same, which is what sells it.
 private const val TUBE = """
 uniform float2 size;
+uniform float time;   // seconds; stays 0 when not animating
 
-// Each scanline gets its own strength, and a slow "hum bar" drifts down the screen.
+// A frame counter for things that change in steps (static, glitches). Wrapped so
+// hash inputs stay small and precise.
+float frame(float fps) { return mod(floor(time * fps), 257.0); }
+
+// Each scanline gets its own strength, and a soft "hum bar" rolls slowly down the
+// screen, like mains interference on an old set.
 float scanline(float y) {
     float row = floor(y / 3.0);
     float wave = 0.5 + 0.5 * sin(y * 6.2832 / 3.0);
     float jitter = 0.8 + 0.4 * hash(float2(row, 17.0));
-    float hum = 0.85 + 0.3 * noise(float2(y * 0.004, 3.0));
-    return wave * jitter * hum;
+    float hum = 0.85 + 0.3 * noise(float2(y * 0.004 - time * 0.22, 3.0));
+    float bar = 1.0 + 0.18 * smoothstep(0.0, 0.5, 0.5 - abs(fract(y / size.y * 0.7 - time * 0.06) - 0.5));
+    return wave * jitter * hum * bar;
+}
+
+// Whole-screen brightness wobble: a slow waver plus a tiny per-frame tremble.
+float flicker() {
+    return 1.0 + (noise(float2(time * 7.0, 7.0)) - 0.5) * 0.06 + (hash(float2(frame(60.0), 2.0)) - 0.5) * 0.02;
 }
 
 // Uneven tube brightness: bright center, irregular falloff, a darker smudge or two.
 float tubeLight(float2 xy) {
     float2 c = xy / size * 2.0 - 1.0;
     float r = length(c * float2(1.0, 1.1)) + (fbm(xy * 0.004) - 0.5) * 0.35;
-    return 1.0 - smoothstep(0.55, 1.55, r) * 0.6 - smoothstep(0.6, 0.85, warped(xy * 0.002 + 4.0)) * 0.08;
+    float l = 1.0 - smoothstep(0.55, 1.55, r) * 0.6 - smoothstep(0.6, 0.85, warped(xy * 0.002 + 4.0)) * 0.08;
+    return l * flicker();
 }
 
-// Static: per-pixel snow, clumped so it isn't a perfect uniform hiss.
+// Static: per-pixel snow, clumped, and re-rolled 30 times a second.
 float snow(float2 xy) {
-    return (hash(floor(xy) + 0.37) - 0.5) * (0.5 + noise(xy * 0.05));
+    float f = frame(30.0);
+    return (hash(floor(xy) + 0.37 + f * 13.1) - 0.5) * (0.5 + noise(xy * 0.05 + f * 3.7));
 }
 """
 
@@ -124,10 +167,12 @@ private val curved = RuntimeEffect.makeForShader(
         if (abs(c.x) > 1.0 || abs(c.y) > 1.0) return half4(0, 0, 0, 1);
 
         float2 p = (c * 0.5 + 0.5) * size;
-        // Unstable horizontal sync: every line sits a little off, with the odd bigger slip.
+        // Unstable horizontal sync: every line wobbles a little, and a few random
+        // lines slip further each frame (a new set roughly 12 times a second).
         float row = floor(xy.y / 3.0);
-        float slip = (noise(float2(xy.y * 0.03, 1.0)) - 0.5) * 1.6;
-        slip += step(0.993, hash(float2(row, 5.0))) * (hash(float2(row, 6.0)) - 0.5) * 14.0;
+        float f = frame(12.0);
+        float slip = (noise(float2(xy.y * 0.03, time * 1.5)) - 0.5) * 1.6;
+        slip += step(0.996, hash(float2(row, f + 5.0))) * (hash(float2(row, f + 6.0)) - 0.5) * 14.0;
         p.x += slip;
 
         // Color fringing that grows toward the edges, plus a soft glow from the phosphor.
